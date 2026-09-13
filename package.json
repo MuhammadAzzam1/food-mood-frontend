@@ -1,0 +1,9 @@
+{
+  "name": "food-mood-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": { "dev": "node node_modules/vite/bin/vite.js", "build": "node node_modules/vite/bin/vite.js build", "preview": "node node_modules/vite/bin/vite.js preview" },
+  "dependencies": { "@vitejs/plugin-react": "latest", "framer-motion": "latest", "lucide-react": "latest", "react": "latest", "react-dom": "latest", "react-router-dom": "latest" },
+  "devDependencies": { "vite": "latest" }
+}
