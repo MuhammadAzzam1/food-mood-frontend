@@ -1,0 +1,4 @@
+/* The owner area remains available only at its dedicated route, not in customer navigation. */
+.site-header nav a[href="/owner/login"] {
+  display: none;
+}
