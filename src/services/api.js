@@ -1,4 +1,6 @@
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
+// Keep local storefront and API on the same site so the HttpOnly owner cookie
+// is sent back during the session check. Production always uses VITE_API_BASE_URL.
+const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
 
 async function request(path, options = {}) {
   const response = await fetch(`${BASE_URL}${path}`, {
