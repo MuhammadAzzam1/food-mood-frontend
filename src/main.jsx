@@ -59,6 +59,7 @@ function CartProvider({ children }) {
   const [notice, setNotice] = useState('');
   const [customerOrder, setCustomerOrder] = useState(null);
   const [paymentNotice, setPaymentNotice] = useState('');
+  const expiredReservationRef = useRef(null);
   useEffect(() => {
     let active = true;
     let pending = false;
@@ -112,6 +113,20 @@ function CartProvider({ children }) {
     });
     return request;
   }, [applyCart, sessionId]);
+  useEffect(() => {
+    const reservationExpired = customerOrder && (
+      String(customerOrder.reservation_status).toLowerCase() === 'expired' ||
+      String(customerOrder.order_status).toLowerCase() === 'expired'
+    );
+    if (!reservationExpired) return;
+    const expiredOrderKey = String(customerOrder.order_id) + '-' + String(customerOrder.reservation_status);
+    if (expiredReservationRef.current === expiredOrderKey) return;
+    expiredReservationRef.current = expiredOrderKey;
+    sessionStorage.removeItem('foodmood-reservation-' + customerOrder.order_id);
+    sessionStorage.removeItem('foodmood-total-' + customerOrder.order_id);
+    setNotice('Your payment reservation expired, so those items were removed from your cart. Please add them again when you are ready.');
+    void refresh();
+  }, [customerOrder, refresh]);
   useEffect(() => {
     let active = true;
     refresh({ notify: true }).finally(() => { if (active) setCartLoading(false); });
