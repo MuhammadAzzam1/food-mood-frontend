@@ -44,5 +44,73 @@
 .fm-chat-sr { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @keyframes fm-chat-enter { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
 @keyframes fm-chat-dot { to { opacity: .25; transform: translateY(-3px); } }
-@media (max-width: 480px) { .fm-chat { right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); } .fm-chat-panel { width: calc(100vw - 24px); height: min(570px, calc(100dvh - 103px)); max-height: calc(100dvh - 103px); margin-bottom: 10px; border-radius: 21px; } .fm-chat-launcher { padding: 7px 15px 7px 7px; } .fm-chat-launcher-face { width: 43px; height: 43px; } }
+@media (max-width: 640px) {
+  .fm-chat { right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); }
+  .fm-chat-panel { width: min(420px, calc(100vw - 24px)); height: min(620px, calc(100dvh - 92px)); max-height: calc(100dvh - 92px); margin-bottom: 10px; border-radius: 20px; }
+  .fm-chat-header { padding: 16px 15px; }
+  .fm-chat-log { padding: 15px 13px; }
+  .fm-chat-message { margin-bottom: 14px; }
+  .fm-chat-message > div { max-width: 88%; }
+  .fm-chat-message p { padding: 10px 12px; font-size: .94rem; }
+  .fm-chat-suggestions { padding: 0 13px 12px; }
+  .fm-chat-suggestions button { flex: 1 1 135px; padding: 8px 9px; font-size: .8rem; }
+  .fm-chat-composer { margin: 0 12px; }
+}
+@media (max-width: 420px) {
+  .fm-chat-launcher { width: 52px; height: 52px; padding: 0; justify-content: center; border-radius: 50%; }
+  .fm-chat-launcher-face { width: 44px; height: 44px; }
+  .fm-chat-launcher-label { display: none; }
+  .fm-chat-panel { width: calc(100vw - 20px); max-height: calc(100dvh - 78px); }
+}
 @media (prefers-reduced-motion: reduce) { .fm-chat *, .fm-chat *::before { animation: none !important; transition: none !important; } }
+
+/* Phone layout: pin both edges instead of sizing with 100vw. This avoids the
+   browser scrollbar/safe-area mismatch that used to crop the panel. */
+@media (max-width: 760px) {
+  .fm-chat {
+    left: max(10px, env(safe-area-inset-left));
+    right: max(10px, env(safe-area-inset-right));
+    bottom: max(10px, env(safe-area-inset-bottom));
+    width: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  .fm-chat-panel {
+    width: 100%;
+    height: min(620px, calc(100dvh - 86px));
+    max-height: calc(100dvh - 86px);
+    margin: 0 0 8px;
+    border-radius: 20px;
+  }
+
+  .fm-chat-launcher {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .fm-chat-panel {
+    width: 100%;
+    height: calc(100dvh - 82px);
+    max-height: calc(100dvh - 82px);
+  }
+
+  .fm-chat-launcher {
+    width: 54px;
+    height: 54px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 50%;
+  }
+
+  .fm-chat-launcher-face {
+    width: 46px;
+    height: 46px;
+  }
+
+  .fm-chat-launcher-label {
+    display: none;
+  }
+}

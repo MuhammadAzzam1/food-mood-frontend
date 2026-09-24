@@ -7,18 +7,18 @@ import { api, getError } from './services/api';
 import { categoryImage, categoryPhoto, productImage, normalizeCategory, normalizeProduct } from './catalog';
 import './styles.css';
 import './motion.css';
-import './customer-nav.css';
 import './brand-theme.css';
 import './product-images.css';
 import './brand-logo.css';
 import './hero-product.css';
 import './category-photos.css';
+import './responsive.css';
 import FoodMoodChat from './FoodMoodChat';
 import OwnerManagement from './OwnerManagement';
+import { applyClientBranding, clientConfig, money } from './client-config';
 
 const CartContext = createContext();
 const AuthContext = createContext();
-const money = value => `Rs. ${Number(value || 0).toLocaleString('en-PK')}`;
 const label = value => String(value || '').replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
 const row = (data, index) => Array.isArray(data) ? data[index] : undefined;
 const pageMotion = { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -6 }, transition: { duration: .22, ease: 'easeOut' } };
@@ -33,7 +33,7 @@ const createCartSessionId = () => {
   });
 };
 const getCartSessionId = () => {
-  const storageKey = 'foodmood-cart-session-id';
+  const storageKey = `${clientConfig.businessSlug}-cart-session-id`;
   const saved = localStorage.getItem(storageKey);
   if (saved) return saved;
   const next = createCartSessionId();
@@ -41,6 +41,7 @@ const getCartSessionId = () => {
   return next;
 };
 // Create this before React renders so it exists even while the cart API is loading.
+applyClientBranding();
 const cartSessionId = getCartSessionId();
 
 function useShopHours() { const [open, setOpen] = useState(isShopOpen); useEffect(() => { const refresh = () => setOpen(isShopOpen()); const timer = setInterval(refresh, 30000); return () => clearInterval(timer); }, []); return open; }
@@ -119,15 +120,14 @@ function CartProvider({ children }) {
       String(customerOrder.order_status).toLowerCase() === 'expired'
     );
     if (!reservationExpired) return;
-    const expiredOrderKey = String(customerOrder.order_id) + '-' + String(customerOrder.reservation_status);
+    const expiredOrderKey = `${customerOrder.order_id}-${customerOrder.reservation_status}`;
     if (expiredReservationRef.current === expiredOrderKey) return;
     expiredReservationRef.current = expiredOrderKey;
-    sessionStorage.removeItem('foodmood-reservation-' + customerOrder.order_id);
-    sessionStorage.removeItem('foodmood-total-' + customerOrder.order_id);
+    sessionStorage.removeItem(`foodmood-reservation-${customerOrder.order_id}`);
+    sessionStorage.removeItem(`foodmood-total-${customerOrder.order_id}`);
     setNotice('Your payment reservation expired, so those items were removed from your cart. Please add them again when you are ready.');
     void refresh();
-  }, [customerOrder, refresh]);
-  useEffect(() => {
+  }, [customerOrder, refresh]);  useEffect(() => {
     let active = true;
     refresh({ notify: true }).finally(() => { if (active) setCartLoading(false); });
     const syncWhenActive = () => { if (document.visibilityState === 'visible') refresh(); };
@@ -150,12 +150,24 @@ function CartProvider({ children }) {
 function AuthProvider({ children }) {
   const [token, setToken] = useState(null);
   const [ready, setReady] = useState(false);
-  useEffect(() => { api.session().then(() => setToken('cookie-session')).catch(() => setToken(null)).finally(() => setReady(true)); }, []);
-  const value = { token, ready, login() { setToken('cookie-session'); }, async logout() { try { await api.logout(); } finally { setToken(null); } } };
+  const sessionVersion = useRef(0);
+  useEffect(() => {
+    const version = sessionVersion.current;
+    api.session()
+      .then(() => { if (version === sessionVersion.current) setToken('cookie-session'); })
+      .catch(() => { if (version === sessionVersion.current) setToken(null); })
+      .finally(() => { if (version === sessionVersion.current) setReady(true); });
+  }, []);
+  const value = {
+    token,
+    ready,
+    login() { sessionVersion.current += 1; setToken('cookie-session'); setReady(true); },
+    async logout() { sessionVersion.current += 1; try { await api.logout(); } finally { setToken(null); } },
+  };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-function Header() { const { count, items, total, change, remove } = useCart(); const [open, setOpen] = useState(false), [cartOpen, setCartOpen] = useState(false); return <><header className="site-header"><Link className="brand" to="/"><span className="brand-mark"><img src="/foodmood-logo.jpeg" alt="Food Mood logo"/></span><span>food<span>mood</span></span></Link><button className="mobile-menu" onClick={() => setOpen(!open)} aria-label="Toggle menu">{open ? <X/> : <Menu/>}</button><nav className={open ? 'open' : ''}><Link to="/menu" onClick={() => setOpen(false)}>Menu</Link><Link to="/owner/login" onClick={() => setOpen(false)}>Owner portal</Link><button className="cart-link cart-trigger" onClick={() => { setCartOpen(true); setOpen(false); }}><ShoppingBag size={18}/>Cart <b>{count}</b></button></nav></header><AnimatePresence>{cartOpen && <motion.div className="cart-drawer-wrap" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><button className="drawer-backdrop" aria-label="Close cart" onClick={() => setCartOpen(false)}/><motion.aside className="cart-drawer" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', stiffness: 360, damping: 34 }}><div className="drawer-head"><h2>Your cart</h2><button onClick={() => setCartOpen(false)} aria-label="Close cart"><X size={20}/></button></div><AnimatePresence initial={false}>{items.length ? <motion.div className="drawer-items" layout>{items.map(item => <motion.article layout initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 18 }} className="drawer-item" key={item.variantId}><span>{item.image}</span><div><strong>{item.name}</strong><small>{item.variantName} · {money(item.price)}</small><small className="cart-stock">{Math.max(0, item.availableQuantity - item.quantity)} remaining after cart</small><div className="quantity"><button onClick={() => change(item.variantId, -1)} disabled={item.quantity <= 1}><Minus size={13}/></button><b>{item.quantity}</b><button onClick={() => change(item.variantId, 1)} disabled={item.quantity >= item.availableQuantity}><Plus size={13}/></button></div></div><button className="drawer-remove" onClick={() => remove(item.variantId)} aria-label={`Remove ${item.name}`}><X size={16}/></button></motion.article>)}</motion.div> : <motion.div className="drawer-empty" initial={{ opacity: 0, scale: .96 }} animate={{ opacity: 1, scale: 1 }}><ShoppingBag size={28}/><p>Your cart is waiting for a favourite.</p></motion.div>}</AnimatePresence><div className="drawer-footer"><div><span>Total</span><strong>{money(total)}</strong></div>{items.length ? <Link className="button full" to="/cart" onClick={() => setCartOpen(false)}>View cart <ArrowRight size={17}/></Link> : <Link className="button full" to="/menu" onClick={() => setCartOpen(false)}>Browse menu <ArrowRight size={17}/></Link>}</div></motion.aside></motion.div>}</AnimatePresence></>; }
+function Header() { const { count, items, total, change, remove } = useCart(); const [open, setOpen] = useState(false), [cartOpen, setCartOpen] = useState(false); return <><header className="site-header"><Link className="brand" to="/"><span className="brand-mark"><img src="/foodmood-logo.jpeg" alt="Food Mood logo"/></span><span>food<span>mood</span></span></Link><button className="mobile-menu" onClick={() => setOpen(!open)} aria-label="Toggle menu">{open ? <X/> : <Menu/>}</button><nav className={open ? 'open' : ''}><Link to="/menu" onClick={() => setOpen(false)}>Menu</Link><button className="cart-link cart-trigger" onClick={() => { setCartOpen(true); setOpen(false); }}><ShoppingBag size={18}/>Cart <b>{count}</b></button></nav></header><AnimatePresence>{cartOpen && <motion.div className="cart-drawer-wrap" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><button className="drawer-backdrop" aria-label="Close cart" onClick={() => setCartOpen(false)}/><motion.aside className="cart-drawer" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', stiffness: 360, damping: 34 }}><div className="drawer-head"><h2>Your cart</h2><button onClick={() => setCartOpen(false)} aria-label="Close cart"><X size={20}/></button></div><AnimatePresence initial={false}>{items.length ? <motion.div className="drawer-items" layout>{items.map(item => <motion.article layout initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 18 }} className="drawer-item" key={item.variantId}><span>{item.image}</span><div><strong>{item.name}</strong><small>{item.variantName} · {money(item.price)}</small><small className="cart-stock">{Math.max(0, item.availableQuantity - item.quantity)} remaining after cart</small><div className="quantity"><button onClick={() => change(item.variantId, -1)} disabled={item.quantity <= 1}><Minus size={13}/></button><b>{item.quantity}</b><button onClick={() => change(item.variantId, 1)} disabled={item.quantity >= item.availableQuantity}><Plus size={13}/></button></div></div><button className="drawer-remove" onClick={() => remove(item.variantId)} aria-label={`Remove ${item.name}`}><X size={16}/></button></motion.article>)}</motion.div> : <motion.div className="drawer-empty" initial={{ opacity: 0, scale: .96 }} animate={{ opacity: 1, scale: 1 }}><ShoppingBag size={28}/><p>Your cart is waiting for a favourite.</p></motion.div>}</AnimatePresence><div className="drawer-footer"><div><span>Total</span><strong>{money(total)}</strong></div>{items.length ? <Link className="button full" to="/cart" onClick={() => setCartOpen(false)}>View cart <ArrowRight size={17}/></Link> : <Link className="button full" to="/menu" onClick={() => setCartOpen(false)}>Browse menu <ArrowRight size={17}/></Link>}</div></motion.aside></motion.div>}</AnimatePresence></>; }
 function Footer() { return <footer><div className="brand"><span className="brand-mark"><img src="/foodmood-logo.jpeg" alt="Food Mood logo"/></span><span>food<span>mood</span></span></div><p>Thoughtfully made food for every kind of mood.</p><a className="whatsapp-link" href="https://wa.me/923366860080" target="_blank" rel="noreferrer"><Phone size={15}/> Contact us on WhatsApp<br/><strong>0336 6860080</strong></a><span>© {new Date().getFullYear()} Food Mood</span></footer>; }
 function Layout({ children }) { const location = useLocation(); return <><Header/><CartNotice/><main>{children}</main>{location.pathname === '/' && <WhyFoodMood/>}<Footer/></>; }
 function CartNotice() { const { notice, dismissNotice } = useCart(); return <AnimatePresence>{notice && <motion.div className="cart-notice" role="status" initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}><Check size={18}/><span>{notice}</span><button onClick={dismissNotice} aria-label="Dismiss message"><X size={16}/></button></motion.div>}</AnimatePresence>; }
@@ -190,7 +202,7 @@ function OwnerOrders() { const { token, logout } = useAuth(); const nav = useNav
 function OwnerDetails() { const { token, logout } = useAuth(); const nav = useNavigate(); const { orderId } = useParams(); const [order, setOrder] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false); const load = async () => { setError(''); try { setOrder(await api.order(token, orderId)); } catch (e) { if (e.status === 401) { logout(); nav('/owner/login'); return; } setError(getError(e)); } }; useEffect(() => { load(); }, [orderId]); const action = async (fn) => { setBusy(true); setError(''); try { await fn(); await load(); } catch(e) { setError(getError(e)); } finally { setBusy(false); } }; const cancel = () => { if (window.confirm(`Cancel order #${order.order_id}? Its active stock reservation will be released.`)) action(() => api.updateStatus(token, { order_id: order.order_id, status: 'cancelled' })); }; return <Protected><OwnerShell>{error && !order ? <ErrorState message={error} retry={load}/> : !order ? <Loading text="Loading order…"/> : <><Link className="back-link" to="/owner"><ArrowLeft size={17}/> All orders</Link>{error && <div className="form-error owner-error"><CircleAlert size={17}/>{error}</div>}<div className="owner-detail-grid"><section className="owner-card"><div className="order-title"><div><p className="eyebrow">Order #{order.order_id}</p><h2>{order.customer_name}</h2></div><b className={`tag ${String(order.order_status).toLowerCase()}`}>{label(order.order_status)}</b></div><div className="detail-contact"><span><Phone size={17}/>{order.phone}</span><span><MapPin size={17}/>{order.address}</span></div><h3>Items</h3>{order.items.map(item => <div className="owner-item" key={item.variant_id}><span>{item.quantity}×</span><p>{item.product_name}</p><strong>{money(Number(item.price_at_purchase) * item.quantity)}</strong></div>)}<div className="owner-total"><span>Total amount</span><strong>{money(order.amount)}</strong></div></section><aside className="owner-card actions-card"><p className="eyebrow">Final payment check</p><h3>Review before confirming</h3><b className={`tag ${String(order.payment_status).toLowerCase()}`}>{label(order.payment_status)}</b><p><small>Transaction reference</small><strong>{order.transaction_reference || 'Not submitted yet'}</strong></p>{order.payment_status === 'pending' && <button className="button full" disabled={busy || !order.transaction_reference} onClick={() => action(() => api.verifyPayment(token, order.order_id))}>Confirm & verify payment <Check size={17}/></button>}<hr/><h3>Update order status</h3><label>Next status<select defaultValue="" disabled={busy || ['cancelled', 'delivered', 'expired'].includes(String(order.order_status).toLowerCase())} onChange={e => action(() => api.updateStatus(token, { order_id: order.order_id, status: e.target.value }))}><option value="" disabled>Choose…</option><option value="preparing">Preparing</option><option value="out_for_delivery">Out for Delivery</option><option value="delivered">Delivered</option></select></label><button className="owner-action cancel detail-cancel" disabled={busy || ['cancelled', 'delivered', 'expired'].includes(String(order.order_status).toLowerCase())} onClick={cancel}><X size={16}/> Cancel Order</button></aside></div></>}</OwnerShell></Protected>; }
 
 function OwnerManage() { const { token, logout } = useAuth(); const nav = useNavigate(); return <Protected><OwnerShell><OwnerManagement token={token} onUnauthorized={() => { logout(); nav('/owner/login'); }}/></OwnerShell></Protected>; }
-function App() { const location = useLocation(); const { sessionId, refresh } = useCart(); return <><FoodMoodChat sessionId={sessionId} refresh={refresh} hidden={location.pathname.startsWith('/owner')}/><ScrollEffects/><AnimatePresence mode="wait"><motion.div key={location.pathname + location.search} {...pageMotion}><Routes location={location}><Route path="/" element={<Home/>}/><Route path="/menu" element={<MenuPage/>}/><Route path="/menu/:productId" element={<ProductPage/>}/><Route path="/cart" element={<CartPage/>}/><Route path="/checkout" element={<CheckoutPage/>}/><Route path="/payment/:orderId" element={<PaymentPage/>}/><Route path="/confirmation/:orderId" element={<Confirmation/>}/><Route path="/owner/login" element={<OwnerLogin/>}/><Route path="/owner" element={<OwnerOrders/>}/><Route path="/owner/manage" element={<OwnerManage/>}/><Route path="/owner/products" element={<OwnerProducts/>}/><Route path="/owner/audit" element={<OwnerAudit/>}/><Route path="/owner/orders/:orderId" element={<OwnerDetails/>}/><Route path="*" element={<Navigate to="/" replace/>}/></Routes></motion.div></AnimatePresence></>; }
+function App() { const location = useLocation(); const { sessionId, refresh } = useCart(); return <><FoodMoodChat sessionId={sessionId} refresh={refresh} hidden={location.pathname.startsWith('/owner')}/><ScrollEffects/><AnimatePresence mode="wait" initial={false}><motion.div className="route-shell" key={location.pathname + location.search} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: .16, ease: 'easeOut' }}><Routes location={location}><Route path="/" element={<Home/>}/><Route path="/menu" element={<MenuPage/>}/><Route path="/menu/:productId" element={<ProductPage/>}/><Route path="/cart" element={<CartPage/>}/><Route path="/checkout" element={<CheckoutPage/>}/><Route path="/payment/:orderId" element={<PaymentPage/>}/><Route path="/confirmation/:orderId" element={<Confirmation/>}/><Route path="/owner/login" element={<OwnerLogin/>}/><Route path="/owner" element={<OwnerOrders/>}/><Route path="/owner/manage" element={<OwnerManage/>}/><Route path="/owner/products" element={<OwnerProducts/>}/><Route path="/owner/audit" element={<OwnerAudit/>}/><Route path="/owner/orders/:orderId" element={<OwnerDetails/>}/><Route path="*" element={<Navigate to="/" replace/>}/></Routes></motion.div></AnimatePresence></>; }
 createRoot(document.getElementById('root')).render(<React.StrictMode><BrowserRouter><AuthProvider><CartProvider><App/></CartProvider></AuthProvider></BrowserRouter></React.StrictMode>);
 
 function OwnerProducts() { const { token, logout } = useAuth(); const nav = useNavigate(); const [products, setProducts] = useState([]), [loading, setLoading] = useState(true), [error, setError] = useState(''); const load = async () => { setLoading(true); setError(''); try { setProducts((await api.products()).map(normalizeProduct)); } catch (e) { if (e.status === 401) { logout(); nav('/owner/login'); return; } setError(getError(e)); } finally { setLoading(false); } }; useEffect(() => { load(); }, []); const variants = products.flatMap(product => product.variants.map(variant => ({ ...variant, productName: product.name }))); return <Protected><OwnerShell>{loading ? <Loading text="Loading inventory…"/> : error ? <ErrorState message={error} retry={load}/> : !variants.length ? <Empty icon={Package} title="No products yet" text="Product variants will appear here."/> : <div className="inventory-table"><div className="inventory-head"><span>Product</span><span>Variant</span><span>Availability</span></div>{variants.map(variant => <div className="inventory-row" key={variant.id}><strong>{variant.productName}</strong><span>{variant.name}</span><span className={`inventory-stock ${variant.availableQuantity === 0 ? 'out' : variant.availableQuantity <= 5 ? 'low' : ''}`}>{variant.availableQuantity === 0 ? 'Out of Stock' : `${variant.availableQuantity} left`}</span></div>)}</div>}</OwnerShell></Protected>; }
