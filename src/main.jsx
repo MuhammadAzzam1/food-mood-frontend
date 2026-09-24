@@ -148,16 +148,23 @@ function CartProvider({ children }) {
 }
 
 function AuthProvider({ children }) {
+  const location = useLocation();
+  const needsSessionCheck = location.pathname.startsWith('/owner') && location.pathname !== '/owner/login';
   const [token, setToken] = useState(null);
   const [ready, setReady] = useState(false);
   const sessionVersion = useRef(0);
   useEffect(() => {
+    if (!needsSessionCheck) {
+      setReady(true);
+      return undefined;
+    }
     const version = sessionVersion.current;
+    setReady(false);
     api.session()
       .then(() => { if (version === sessionVersion.current) setToken('cookie-session'); })
       .catch(() => { if (version === sessionVersion.current) setToken(null); })
       .finally(() => { if (version === sessionVersion.current) setReady(true); });
-  }, []);
+  }, [needsSessionCheck]);
   const value = {
     token,
     ready,
