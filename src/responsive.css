@@ -8,6 +8,62 @@ body,
   min-width: 0;
 }
 
+/* Cart drawer interaction layer: keeps the full flow tappable on mobile. */
+.cart-drawer-wrap {
+  z-index: 100;
+  isolation: isolate;
+}
+.drawer-backdrop {
+  z-index: 0;
+}
+.cart-drawer {
+  z-index: 1;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+.drawer-head,
+.drawer-footer {
+  flex: 0 0 auto;
+}
+.drawer-items {
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+.drawer-footer {
+  background: #fffdf9;
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+}
+.drawer-footer .button {
+  min-height: 48px;
+  position: relative;
+  z-index: 2;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.cart-drawer-open .fm-chat {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.form-card select {
+  display: block;
+  width: 100%;
+  min-height: 46px;
+  margin-top: 7px;
+  padding: 11px 38px 11px 13px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid #ded9d1;
+  border-radius: 8px;
+  font: inherit;
+}
+.form-card select:focus {
+  border-color: var(--orange);
+  box-shadow: 0 0 0 3px #f46b2a1a;
+  outline: none;
+}
+
 html,
 body {
   overflow-x: clip;
