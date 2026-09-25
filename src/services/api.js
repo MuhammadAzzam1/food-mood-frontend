@@ -3,16 +3,36 @@
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
 
 async function request(path, options = {}) {
-  const response = await fetch(`${BASE_URL}${path}`, {
-    method: options.method,
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), options.timeoutMs || 20_000);
+  let response;
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      method: options.method,
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: options.body ? JSON.stringify(options.body) : undefined,
+      signal: controller.signal,
+    });
+  } catch (cause) {
+    const timedOut = cause?.name === 'AbortError';
+    const error = new Error(timedOut
+      ? 'The ordering server took too long to respond. Your cart is safe; please try again.'
+      : 'We could not reach the ordering server. Check your connection and try again; your cart is safe.');
+    error.code = timedOut ? 'REQUEST_TIMEOUT' : 'NETWORK_ERROR';
+    error.cause = cause;
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
   const data = await response.json().catch(() => null);
   if (!response.ok) {
     const detail = data?.detail;
-    const message = typeof detail === 'string' ? detail : detail?.message || data?.message || 'Something went wrong.';
+    const message = typeof detail === 'string'
+      ? detail
+      : detail?.message || data?.message || (response.status >= 500
+        ? 'The ordering server had a temporary problem. Your cart is safe; please try again.'
+        : 'We could not complete that request. Please review your details and try again.');
     const error = new Error(message);
     error.status = response.status;
     error.detail = detail;
@@ -75,7 +95,7 @@ export const api = {
   updateCartItem: (sessionId, variantId, body) => request(`/cart/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(variantId)}`, { method: 'PATCH', body }),
   removeCartItem: (sessionId, variantId) => request(`/cart/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(variantId)}`, { method: 'DELETE' }),
   clearCart: sessionId => request(`/cart/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }),
-  checkout: body => request('/checkout', { method: 'POST', body }),
+  checkout: body => request('/checkout', { method: 'POST', body, timeoutMs: 25_000 }),
   paymentReference: body => request('/payment_referance', { method: 'POST', body }),
   login: body => request('/admin/login', { method: 'POST', body }),
   session: () => request('/admin/session'),
@@ -99,4 +119,10 @@ export const api = {
   updateStatus: (_token, body) => request('/owner/orders/status', { method: 'PUT', body }),
 };
 
-export const getError = error => error?.message || 'Please check your connection and try again.';
+export const getError = error => {
+  if (error?.code === 'REQUEST_TIMEOUT') return 'The server took too long to respond. Your cart is safe; please try again.';
+  if (error?.code === 'NETWORK_ERROR') return 'We could not reach the ordering server. Check your internet connection and try again; your cart is safe.';
+  if (error?.status === 429) return error?.message || 'Too many attempts. Please wait a moment and try again.';
+  if (error?.status >= 500) return 'The ordering server is temporarily unavailable. Your cart is safe; please try again in a moment.';
+  return error?.message || 'We could not complete that request. Please try again.';
+};
